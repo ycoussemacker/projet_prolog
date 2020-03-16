@@ -53,14 +53,35 @@ colonne(N):-N=<4, N>0.
 listePerso([]).
 listePerso([T|Q]) :- personnage(T), listePerso(Q).
 
-% prédicat tuile
-tuile(Ligne, Colonne, ListePerso). %:- ligne(Ligne), colonne(Colonne), listePerso(ListePerso).
+% prédicat tuile (ajout à la bdd de toutes les tuiles possibles initialisées avec des listes de perso vides)
+:- asserta(tuile(1,1,[])).
+:- asserta(tuile(1,2,[])).
+:- asserta(tuile(1,3,[])).
+:- asserta(tuile(1,4,[])).
+:- asserta(tuile(2,1,[])).
+:- asserta(tuile(2,2,[])).
+:- asserta(tuile(2,3,[])).
+:- asserta(tuile(2,4,[])).
+:- asserta(tuile(3,1,[])).
+:- asserta(tuile(3,2,[])).
+:- asserta(tuile(3,3,[])).
+:- asserta(tuile(3,4,[])).
+:- asserta(tuile(4,1,[])).
+:- asserta(tuile(4,2,[])).
+:- asserta(tuile(4,3,[])).
+:- asserta(tuile(4,4,[])).
 
 % prédiact déplacer => ajouter un personnage au début de la listePerso d'une tuile et le supprimer de la listePerso de la tuile d'origine
-deplacer(Perso, Ligne, Colonne) :- personnage(Perso), retract(tuile(Ligne,Colonne, ListePerso)), asserta(tuile(Ligne,Colonne,[Perso|ListePerso])).
+deplacer(Perso, Ligne, Colonne) :- personnage(Perso), ajouter(Perso, Ligne, Colonne).
 
-% ajouter(Perso, ListePerso, [Perso|ListePerso]).
+% supprime l'ancienne tuile pour la remplacer par la tuile avec la liste de perso actualisée
+ajouter(Perso, Ligne, Colonne) :-  retract(tuile(Ligne,Colonne, ListePerso)), asserta(tuile(Ligne,Colonne,[Perso|ListePerso])).
 
+supprimer(Perso,L,C) :- trouve(Perso,tuile(L,C,LP)), retract(tuile(L,C,ListePerso)), asserta(tuile(L,C,[supprimer])).
+supprimer(Perso,L,C) :- NL is L+1, NL=<4, NC is C+1, NC=<4, supprimer(Perso,L,C).
+
+trouve(Perso,tuile(L,C,[T|Q])) :- T == Perso.
+trouve(Perso,tuile(L,C,[T|Q])) :- trouve(Perso,tuile(L,C,Q)).
 
 
 % p(X,Y):-gkjsdngksjdngksdjb, retract(fait(Z)), NZ is Z+3, asserta(fait(NZ)), 
