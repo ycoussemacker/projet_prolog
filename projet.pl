@@ -59,8 +59,8 @@ listePerso([T|Q]) :- personnage(T), listePerso(Q).
 :- asserta(tuile(1,3,[])).
 :- asserta(tuile(1,4,[])).
 :- asserta(tuile(2,1,[])).
-:- asserta(tuile(2,2,[])).
 :- asserta(tuile(2,3,[])).
+:- asserta(tuile(2,2,[])).
 :- asserta(tuile(2,4,[])).
 :- asserta(tuile(3,1,[])).
 :- asserta(tuile(3,2,[])).
