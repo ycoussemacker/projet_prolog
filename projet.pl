@@ -45,10 +45,6 @@ arme(pistolet).
 arme(couteau).
 arme(fusil).
 
-% prédicat des coordonées
-ligne(N):-N=<4, N>0.
-colonne(N):-N=<4, N>0.
-
 % Liste Perso
 listePerso([]).
 listePerso([T|Q]) :- personnage(T), listePerso(Q).
@@ -72,23 +68,23 @@ listePerso([T|Q]) :- personnage(T), listePerso(Q).
 :- asserta(tuile(4,4,[])).
 
 % prédiact déplacer => ajouter un personnage au début de la listePerso d'une tuile et le supprimer de la listePerso de la tuile d'origine
-deplacer(Perso, Ligne, Colonne) :- personnage(Perso), ajouter(Perso, Ligne, Colonne).
+deplacer(Perso, Ligne, Colonne) :- personnage(Perso), supprimer(Perso), ajouter(Perso, Ligne, Colonne).
 
 % supprime l'ancienne tuile pour la remplacer par la tuile avec la liste de perso actualisée
 ajouter(Perso, Ligne, Colonne) :-  retract(tuile(Ligne,Colonne, ListePerso)), asserta(tuile(Ligne,Colonne,[Perso|ListePerso])).
 
-supprimer(Perso,L,C) :- trouve(Perso,tuile(L,C,LP)), retract(tuile(L,C,ListePerso)), asserta(tuile(L,C,[supprimer])).
-supprimer(Perso,L,C) :- NL is L+1, NL=<4, NC is C+1, NC=<4, supprimer(Perso,L,C).
+% Cherche parmis toutes les tuiles qu'il possède celle qui contient le personnage et supprime le personnage de cette dernière.
+supprimer(Perso) :- tuile(L,C,ListePerso), dans(Perso,ListePerso), supprimer(Perso,ListePerso, NewList), retract(tuile(L,C,_)), asserta(tuile(L,C,NewList)).% On récupère la liste des perso à partir de ligne et ccolonne pour en supprimer le Perso
+supprimer(Perso, [T|Q], [T|QT]) :- Perso\=T, supprimer(Perso,Q, QT).
+supprimer(Perso, [Perso|Q], QT) :- supprimer(Perso, Q, QT).
+supprimer(_,[],[]).
 
-trouve(Perso,tuile(L,C,[T|Q])) :- T == Perso.
-trouve(Perso,tuile(L,C,[T|Q])) :- trouve(Perso,tuile(L,C,Q)).
+% Renseigne si un element X est dans une liste.
+dans(X,[X|_]). 
+dans(X,[_|Q]) :- dans(X,Q).
 
-
-% p(X,Y):-gkjsdngksjdngksdjb, retract(fait(Z)), NZ is Z+3, asserta(fait(NZ)), 
-
-% memorise:- travail(X), asserta(fait(X)).
-
-
+% Permet l'affichage du plateau en appuyant sur le ";" dans la console ProLog
+plateau(X,Y,LP):- tuile(X,Y,LP).
 
 
 %
