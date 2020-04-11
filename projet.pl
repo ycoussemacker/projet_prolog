@@ -4,9 +4,6 @@
 % :-retractall(listePerso(_)).
 
 
-
-
-
 % liste des 16 perso
 personnage(girafe).
 personnage(lion).
@@ -86,5 +83,17 @@ dans(X,[_|Q]) :- dans(X,Q).
 % Permet l'affichage du plateau en appuyant sur le ";" dans la console ProLog
 plateau(X,Y,LP):- tuile(X,Y,LP).
 
+% Initialiser placement aléatoire des perso pour commencer le jeu
+% Initialiser placement des 4 cases sniper
 
-%
+% Début de la partie = les scores sont nuls
+pointsUtilisateur(0).
+pointsOrdi(0).
+
+% Passer du tour du joueur au tour de l'ordinateur
+nouveauTour:-tour(utilisateur), retract(tour(utilisateur)), assert(tour(ordi)).
+nouveauTour:-tour(ordi), retract(tour(ordi)), assert(tour(utilisateur)).
+
+% Je suis pas tellement sure de ça j'ai testé un truc
+% Déplacer un personnage : P pour le nom du perso, X et Y pour les coordonnees de la case où le perso va aller
+deplacer(P,X,Y):- case(X,Y), retract(personnage(P,_,_)), assert(personnage(P,X,Y)).
