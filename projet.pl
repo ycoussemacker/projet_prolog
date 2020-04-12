@@ -101,7 +101,7 @@ debutPartie():- vivants(L),             % On récupère la liste des vivants
                 longueur(N,L), N < 1,   % On démare la partie seulement si la liste des vivants est vide
                 attribution(), 
                 donneTueur(),
-                donneCible().
+                donneCible(), !.
 
 attribution():- retract(tuile(Ligne, Colonne, LP)),         % On supprime la tuile et on récupère chaque Ligne et colonne (début de la boucle)
                 retract(morts(ListeMorts)),                 % On récupère la liste des personnages à placer (en la supprimant)
@@ -159,16 +159,32 @@ nouveauTour():-tour(ordi), retract(tour(ordi)), assert(tour(utilisateur)).
 
 % ------ DEPLACER ----- 
 % Prédicat déplacer => ajouter un personnage au début de la listePerso d'une tuile et le supprimer de la listePerso de la tuile d'origine
-deplacer(Perso, Ligne, Colonne) :- personnage(Perso), supprimer(Perso), ajouter(Perso, Ligne, Colonne).
+deplacer(Perso, Ligne, Colonne) :- personnage(Perso), supprimer(Perso), ajouter(Perso, Ligne, Colonne), !.
 % Ajoute le personnage à la tuile renseignée
 ajouter(Perso, Ligne, Colonne) :-  retract(tuile(Ligne,Colonne, ListePerso)), asserta(tuile(Ligne,Colonne,[Perso|ListePerso])).
 % Cherche parmis toutes les tuiles qu'il possède celle qui contient le personnage et supprime le personnage de cette dernière.
 supprimer(Perso) :- tuile(L,C,ListePerso), dans(Perso,ListePerso), supprimer(Perso,ListePerso, NewList), retract(tuile(L,C,_)), asserta(tuile(L,C,NewList)).% On récupère la liste des perso à partir de ligne et ccolonne pour en supprimer le Perso
 
-% ----- TUER ------ 
+% ----- PEUT TUER ------ 
 
 % -- Couteau
-peutTuer(P1,P2):-P1\=P2, tuile(_,_,L), dans(P1,L), dans(P2,L).
+peutTuer(P1,P2):-   personnage(P1), personnage(P2), P1\=P2, % on selectionne deux personnages différents
+                    tuile(_,_,L), dans(P1,L), dans(P2,L).   % on selectionne la tuile dans laquelle les deux se trouvent. Is il y en a une => P1 peut tuer P2
+                    
+                    
+% -- Pistolet
+peutTuer(P1,P2):-   personnage(P1), tuile(X,Y,L), dans(P1,L), longueur(N,L), N==1,  % On vérifie que P1 est seul dans sa case
+                    personnage(P2), P1\=P2, tuileAdj(X,Y,Li), dans(P2,Li).          % On prend un personnage P2 faisant partie d'une tuile adjacente. Si il y en a une ==> P1 peut tuer P2
+
+% -- Fusil
+peutTuer(P1,P2):-   personnage(P1), tuile(X,Y,L), 
+                    dans(P1,L), longueur(N,L), N==1, viseur(X,Y),           % On vérifie que P1 est seul dans sa case et possède un viseur
+                    personnage(P2), P1\=P2, tuile(_,Y,Li), dans(P2,Li).     % On cherche une tuile dans la même colonne où P2 se trouve. Si on trouve une tuile ==> P1 peut tuer P2
+peutTuer(P1,P2):-   personnage(P1), tuile(X,Y,L), 
+                    dans(P1,L), longueur(N,L), N==1 , viseur(X,Y),          % On vérifie que P1 est seul dans sa case
+                    personnage(P2), P1\=P2, tuile(X,_,Li), dans(P2,Li).     % On cherche une tuile dans la même ligne où P2 se trouve. Si on trouve une tuile ==> P1 peut tuer P2
+
+% ----- TUE ------
 
 
 
@@ -199,3 +215,17 @@ nonDans(X,[T|Q]):- X\=T, nonDans(X,Q), !.
 % Renseigne la longueur d'une liste
 longueur(N,[_|Q]):- longueur(N1,Q), N is N1+1.
 longueur(0,[]).
+
+% Concatener deux listes
+conc([X],L2,[X|L2]).
+conc([T1|Q1],L2,[T1|NQ]) :- conc(Q1,L2,NQ).
+
+% Donne la liste de personnage des tuiles adjacentes à la tuile(X,Y,_)
+tuileAdj(X,Y,Li):- Xi is X-1, Yi is Y-1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Li):- Xi is X-1, Yi is Y  , tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Li):- Xi is X-1, Yi is Y+1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Li):- Xi is X  , Yi is Y-1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Li):- Xi is X  , Yi is Y+1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Li):- Xi is X+1, Yi is Y-1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Li):- Xi is X+1, Yi is Y  , tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Li):- Xi is X+1, Yi is Y+1, tuile(Xi,Yi,Li).
