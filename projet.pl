@@ -5,6 +5,9 @@
 :-dynamic(morts/1).
 :-retractall(morts(_)).
 
+:-dynamic(inutiles/1).
+:-retractall(inutiles(_)).
+
 :-dynamic(vivants/1).
 :-retractall(vivants(_)).
 
@@ -72,6 +75,7 @@ arme(fusil).
 % -- Prédicat tuile (ajout à la bdd de toutes les tuiles possibles initialisées avec des listes de perso vides)
 % tous les personnages sont morts au début. On va les ressusiter (=déplacer dans la liste des vivant) en attribuant à chaque case un de ces personnages.
 :-asserta(morts([girafe,lion, morse, crocodile, renard, lapin, loup, chat, chien, canard,oie, elephant, loutre, poisson, souris, serpent])).
+:-asserta(inutiles([girafe,lion, morse, crocodile, renard, lapin, loup, chat, chien, canard,oie, elephant, loutre, poisson, souris, serpent])).
 :-asserta(vivants([])).
 :-asserta(ciblesUtilisateur([])).
 :-asserta(ciblesOrdi([])).
@@ -109,29 +113,38 @@ attribution():- retract(tuile(Ligne, Colonne, LP)),         % On supprime la tui
                 assert(morts(NewList)),                     % On ajoute la nouvelle liste des perso à placer
                 longueur(N, NewList), N < 1.                % On termine le programme si il n'y a plus de perso à placer. (Fin de la boucle)
 
-donneTueur():- vivants(L), random_member(Perso1, L), assert(tueurUtilisateur(Perso1)), random_member(Perso2, L), Perso2\=Perso1, assert(tueurOrdi(Perso2)).
+donneTueur():-  retract(inutiles(L1)),              %recupère la liste des perso inutilisés
+                random_member(Perso1, L1),          % Choisi au hasard un personnage dans cette liste
+                assert(tueurUtilisateur(Perso1)),   % selectionne ce personnage comme tueur pour l'utilisateur
+                supprimer(Perso1, L1, L2),          % supprime ce personnage de la liste des inutiles
+                random_member(Perso2, L2),          % choisi un deuxième utilisateur
+                assert(tueurOrdi(Perso2)),          % selectionne ce perso comme tueur de l'ordi
+                supprimer(Perso2, L2, L3),          % supprime ce perso de la liste des inutiles
+                assert(inutiles(L3)).                % actualise la liste des inutiles.
 
-donneCible():- donneCible(utilisateur), donneCible(ordi).
-donneCible(P):- P == utilisateur, 
-                vivants(L), 
-                retract(ciblesUtilisateur(L1)), 
-                random_member(Perso1, L),  
-                random_member(Perso2, L), 
-                Perso2\=Perso1,
-                random_member(Perso3, L), 
-                Perso3\=Perso1, Perso3\=Perso2,
-                assert(ciblesUtilisateur([Perso3|[Perso2|[Perso1|L1]]])).
-donneCible(P):- P==ordi,
-                vivants(L),
-                ciblesUtilisateur(LCU),
-                retract(ciblesOrdi(L1)),
-                random_member(Perso1,L),
-                nonDans(Perso1,LCU),
-                random_member(Perso2,L),
-                nonDans(Perso2,LCU), Perso2\=Perso1,
-                random_member(Perso3,L),
-                nonDans(Perso3,LCU), Perso3\=Perso2, Perso3\=Perso1,
-                assert(ciblesUtilisateur([Perso3|[Perso2|[Perso1|L1]]])).
+donneCible():- donneCibleU(), donneCibleO().
+donneCibleU():-
+                retract(inutiles(L1)),              % On recupère la liste des inutilisés
+                random_member(Perso1, L1),          % On choisi au hasard un perso parmi la liste
+                supprimer(Perso1, L1, L2),          % on supprime ce personnage de la liste des inutiles
+                random_member(Perso2, L2),          % On choisi au hasard un 2ème perso parmi la nouvelle liste
+                supprimer(Perso2, L2, L3),          % supprime ce personnage de la liste des inutiles
+                random_member(Perso3, L3),           % On choisi au hasard un 3ème perso parmi la nouvelle liste
+                supprimer(Perso3, L3, L4),          % supprime ce personnage de la liste des inutiles 
+                assert(inutiles(L4)),               % On actualise la liste des inutiles
+                retract(ciblesUtilisateur(L)), 
+                assert(ciblesUtilisateur([Perso3|[Perso2|[Perso1|L]]])).
+donneCibleO():-
+                retract(inutiles(L1)),              % On recupère la liste des inutilisés
+                random_member(Perso1, L1),          % On choisi au hasard un perso parmi la liste
+                supprimer(Perso1, L1, L2),          % on supprime ce personnage de la liste des inutiles
+                random_member(Perso2, L2),          % On choisi au hasard un 2ème perso parmi la nouvelle liste
+                supprimer(Perso2, L2, L3),          % supprime ce personnage de la liste des inutiles
+                random_member(Perso3, L3),           % On choisi au hasard un 3ème perso parmi la nouvelle lisste
+                supprimer(Perso3, L3, L4),          % supprime ce personnage de la liste des inutiles 
+                assert(inutiles(L4)),               % On actualise la liste des inutiles
+                retract(ciblesOrdi(L)), 
+                assert(ciblesOrdi([Perso3|[Perso2|[Perso1|L]]])).
 
 % Début de la partie = les scores sont nuls
 :- asserta(pointsUtilisateur(0)).
@@ -144,7 +157,7 @@ nouveauTour():-tour(ordi), retract(tour(ordi)), assert(tour(utilisateur)).
 
 % ----------------------- ACTIONS DES JOUEURS ---------------------------
 
-% -- DEPLACER -- 
+% ------ DEPLACER ----- 
 % Prédicat déplacer => ajouter un personnage au début de la listePerso d'une tuile et le supprimer de la listePerso de la tuile d'origine
 deplacer(Perso, Ligne, Colonne) :- personnage(Perso), supprimer(Perso), ajouter(Perso, Ligne, Colonne).
 % Ajoute le personnage à la tuile renseignée
@@ -152,7 +165,11 @@ ajouter(Perso, Ligne, Colonne) :-  retract(tuile(Ligne,Colonne, ListePerso)), as
 % Cherche parmis toutes les tuiles qu'il possède celle qui contient le personnage et supprime le personnage de cette dernière.
 supprimer(Perso) :- tuile(L,C,ListePerso), dans(Perso,ListePerso), supprimer(Perso,ListePerso, NewList), retract(tuile(L,C,_)), asserta(tuile(L,C,NewList)).% On récupère la liste des perso à partir de ligne et ccolonne pour en supprimer le Perso
 
-% -- TUER -- 
+% ----- TUER ------ 
+
+% -- Couteau
+peutTuer(P1,P2):-P1\=P2, tuile(_,_,L), dans(P1,L), dans(P2,L).
+
 
 
 % -- CONTROLER --
@@ -176,8 +193,8 @@ dans(X,[X|_]).
 dans(X,[_|Q]) :- dans(X,Q).
 
 % Renseigne si un element n'est pas dans une liste
-nonDans(X,[T|Q]):- X\=T, nonDans(X,Q).
 nonDans(_,[]).
+nonDans(X,[T|Q]):- X\=T, nonDans(X,Q), !.
 
 % Renseigne la longueur d'une liste
 longueur(N,[_|Q]):- longueur(N1,Q), N is N1+1.
