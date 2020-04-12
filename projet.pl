@@ -14,23 +14,17 @@
 :-dynamic(tour/1).
 :-retractall(tour(_)).
 
-:-dynamic(pointsUtilisateur/1).
-:-retractall(pointsUtilisateur(_)).
+:-dynamic(points/2).
+:-retractall(points(_,_)).
 
-:-dynamic(pointsOrdi/1).
-:-retractall(pointsOrdi(_)).
+:-dynamic(tueur/2).
+:-retractall(tueur(_,_)).
 
-:-dynamic(tueurUtilisateur/1).
-:-retractall(tueurUtilisateur(_)).
+:-dynamic(cibles/2).
+:-retractall(cibles(_,_)).
 
-:-dynamic(ciblesUtilisateur/1).
-:-retractall(ciblesUtilisateur(_)).
-
-:-dynamic(tueurOrdi/1).
-:-retractall(tueurOrdi(_)).
-
-:-dynamic(ciblesOrdi/1).
-:-retractall(ciblesOrdi(_)).
+% les joueurs
+joueurs([utilisateur, ordi]).
 
 % liste des 16 perso
 personnage(girafe).
@@ -77,8 +71,8 @@ arme(fusil).
 :-asserta(morts([girafe,lion, morse, crocodile, renard, lapin, loup, chat, chien, canard,oie, elephant, loutre, poisson, souris, serpent])).
 :-asserta(inutiles([girafe,lion, morse, crocodile, renard, lapin, loup, chat, chien, canard,oie, elephant, loutre, poisson, souris, serpent])).
 :-asserta(vivants([])).
-:-asserta(ciblesUtilisateur([])).
-:-asserta(ciblesOrdi([])).
+:-asserta(cibles(utilisateur,[])).
+:-asserta(cibles(ordi,[])).
 
 :- asserta(tuile(1,1,[])).
 :- asserta(tuile(1,2,[])).
@@ -101,7 +95,9 @@ debutPartie():- vivants(L),             % On récupère la liste des vivants
                 longueur(N,L), N < 1,   % On démare la partie seulement si la liste des vivants est vide
                 attribution(), 
                 donneTueur(),
-                donneCible(), !.
+                donneCibles(), 
+                joueurs(ListeJoueurs), random_member(J,ListeJoueurs), assert(tour(J)), %On choisi au hasard qui commence
+                !.
 
 attribution():- retract(tuile(Ligne, Colonne, LP)),         % On supprime la tuile et on récupère chaque Ligne et colonne (début de la boucle)
                 retract(morts(ListeMorts)),                 % On récupère la liste des personnages à placer (en la supprimant)
@@ -115,15 +111,15 @@ attribution():- retract(tuile(Ligne, Colonne, LP)),         % On supprime la tui
 
 donneTueur():-  retract(inutiles(L1)),              %recupère la liste des perso inutilisés
                 random_member(Perso1, L1),          % Choisi au hasard un personnage dans cette liste
-                assert(tueurUtilisateur(Perso1)),   % selectionne ce personnage comme tueur pour l'utilisateur
+                assert(tueur(utilisateur,Perso1)),  % selectionne ce personnage comme tueur pour l'utilisateur
                 supprimer(Perso1, L1, L2),          % supprime ce personnage de la liste des inutiles
                 random_member(Perso2, L2),          % choisi un deuxième utilisateur
-                assert(tueurOrdi(Perso2)),          % selectionne ce perso comme tueur de l'ordi
+                assert(tueur(ordi,Perso2)),          % selectionne ce perso comme tueur de l'ordi
                 supprimer(Perso2, L2, L3),          % supprime ce perso de la liste des inutiles
                 assert(inutiles(L3)).                % actualise la liste des inutiles.
 
-donneCible():- donneCibleU(), donneCibleO().
-donneCibleU():-
+donneCibles():- donneCibles(utilisateur), donneCibles(ordi).
+donneCibles(J):-
                 retract(inutiles(L1)),              % On recupère la liste des inutilisés
                 random_member(Perso1, L1),          % On choisi au hasard un perso parmi la liste
                 supprimer(Perso1, L1, L2),          % on supprime ce personnage de la liste des inutiles
@@ -132,23 +128,12 @@ donneCibleU():-
                 random_member(Perso3, L3),           % On choisi au hasard un 3ème perso parmi la nouvelle liste
                 supprimer(Perso3, L3, L4),          % supprime ce personnage de la liste des inutiles 
                 assert(inutiles(L4)),               % On actualise la liste des inutiles
-                retract(ciblesUtilisateur(L)), 
-                assert(ciblesUtilisateur([Perso3|[Perso2|[Perso1|L]]])).
-donneCibleO():-
-                retract(inutiles(L1)),              % On recupère la liste des inutilisés
-                random_member(Perso1, L1),          % On choisi au hasard un perso parmi la liste
-                supprimer(Perso1, L1, L2),          % on supprime ce personnage de la liste des inutiles
-                random_member(Perso2, L2),          % On choisi au hasard un 2ème perso parmi la nouvelle liste
-                supprimer(Perso2, L2, L3),          % supprime ce personnage de la liste des inutiles
-                random_member(Perso3, L3),           % On choisi au hasard un 3ème perso parmi la nouvelle lisste
-                supprimer(Perso3, L3, L4),          % supprime ce personnage de la liste des inutiles 
-                assert(inutiles(L4)),               % On actualise la liste des inutiles
-                retract(ciblesOrdi(L)), 
-                assert(ciblesOrdi([Perso3|[Perso2|[Perso1|L]]])).
+                retract(cibles(J,L)), 
+                assert(cibles(J,[Perso3|[Perso2|[Perso1|L]]])).
 
-% Début de la partie = les scores sont nuls
-:- asserta(pointsUtilisateur(0)).
-:- asserta(pointsOrdi(0)).
+% Début de la partie = les scores sont initialisés à 2 car leur tueur à gage est toujours en vadrouille.
+:- asserta(points(utilisateur,2)).
+:- asserta(points(ordi,2)).
 
 % Passer du tour du joueur au tour de l'ordinateur
 nouveauTour():-tour(utilisateur), retract(tour(utilisateur)), assert(tour(ordi)).
@@ -168,25 +153,46 @@ supprimer(Perso) :- tuile(L,C,ListePerso), dans(Perso,ListePerso), supprimer(Per
 % ----- PEUT TUER ------ 
 
 % -- Couteau
-peutTuer(P1,P2):-   personnage(P1), personnage(P2), P1\=P2, % on selectionne deux personnages différents
-                    tuile(_,_,L), dans(P1,L), dans(P2,L).   % on selectionne la tuile dans laquelle les deux se trouvent. Is il y en a une => P1 peut tuer P2
+peutTuer(P1,P2,Xt,Yt):- personnage(P1), personnage(P2), P1\=P2, % on selectionne deux personnages différents
+                        tuile(Xt,Yt,L), dans(P1,L), dans(P2,L). % on selectionne la tuile dans laquelle les deux se trouvent. Is il y en a une => P1 peut tuer P2
                     
                     
 % -- Pistolet
-peutTuer(P1,P2):-   personnage(P1), tuile(X,Y,L), dans(P1,L), longueur(N,L), N==1,  % On vérifie que P1 est seul dans sa case
-                    personnage(P2), P1\=P2, tuileAdj(X,Y,Li), dans(P2,Li).          % On prend un personnage P2 faisant partie d'une tuile adjacente. Si il y en a une ==> P1 peut tuer P2
+peutTuer(P1,P2,Xt,Yt):- personnage(P1), tuile(X,Y,L), dans(P1,L), longueur(N,L), N==1,  % On vérifie que P1 est seul dans sa case
+                        personnage(P2), P1\=P2, tuileAdj(X,Y,Xt,Yt,Li), dans(P2,Li).    % On prend un personnage P2 faisant partie d'une tuile adjacente. Si il y en a une ==> P1 peut tuer P2
 
 % -- Fusil
-peutTuer(P1,P2):-   personnage(P1), tuile(X,Y,L), 
-                    dans(P1,L), longueur(N,L), N==1, viseur(X,Y),           % On vérifie que P1 est seul dans sa case et possède un viseur
-                    personnage(P2), P1\=P2, tuile(_,Y,Li), dans(P2,Li).     % On cherche une tuile dans la même colonne où P2 se trouve. Si on trouve une tuile ==> P1 peut tuer P2
-peutTuer(P1,P2):-   personnage(P1), tuile(X,Y,L), 
-                    dans(P1,L), longueur(N,L), N==1 , viseur(X,Y),          % On vérifie que P1 est seul dans sa case
-                    personnage(P2), P1\=P2, tuile(X,_,Li), dans(P2,Li).     % On cherche une tuile dans la même ligne où P2 se trouve. Si on trouve une tuile ==> P1 peut tuer P2
+peutTuer(P1,P2,Xt,Yt):- personnage(P1), tuile(X,Yt,L), 
+                        dans(P1,L), longueur(N,L), N==1, viseur(X,Yt),           % On vérifie que P1 est seul dans sa case et possède un viseur
+                        personnage(P2), P1\=P2, tuile(Xt,Yt,Li), dans(P2,Li).    % On cherche une tuile dans la même colonne où P2 se trouve. Si on trouve une tuile ==> P1 peut tuer P2
+peutTuer(P1,P2,Xt,Yt):- personnage(P1), tuile(Xt,Y,L), 
+                        dans(P1,L), longueur(N,L), N==1 , viseur(Xt,Y),          % On vérifie que P1 est seul dans sa case
+                        personnage(P2), P1\=P2, tuile(Xt,Yt,Li), dans(P2,Li),!.    % On cherche une tuile dans la même ligne où P2 se trouve. Si on trouve une tuile ==> P1 peut tuer P2
+
 
 % ----- TUE ------
+tue(P1,P2):-    peutTuer(P1,P2,X,Y),
+                retract(vivants(LV)), supprimer(P2,LV,NLV), assert(vivants(NLV)),       % On actualise la liste des vivants
+                retract(morts(LM)), assert(morts([P2|LM])),                             % On actualise la liste des morts
+                retract(tuile(X,Y,LP)), supprimer(P2,LP,NLP), assert(tuile(X,Y,NLP)),   % On actualise la tuile
+                donnePoints(P2).                                                        % On actualise les points
 
+donnePoints(P2):-   tour(J), points(J,N), 
+                    cibles(J,LC), dans(P2,LC), NewN is N + 1,               % Si il a éliminé une de ses cibles
+                    retract(points(J,N)), assert(points(J,NewN)),           % on actualise les points
+                    retract(cibles(J,LC)), supprimer(P2,LC,NLC),             % on actualise sa liste de cibles.
+                    assert(cibles(J,NLC)).
 
+donnePoints(P2):-   tour(J), points(J,NJ),
+                    tueur(J2,P2), J2\=J, points(J2,NJ2),                     % Si le joueur tué est le tueur à gage de l'autre.
+                    NewNJ is NJ + 3,                                        % Le joueur actuel gagne 3 points
+                    NewNJ2 is NJ2 - 2,                                      % Son adversaire en perd 2 car il n'a plus son tueur à gage.
+                    retract(points(J,_)), assert(points(J,NewNJ)),
+                    retract(points(J2,_)), assert(points(J2, NewNJ2)).
+
+donnePoints(_):-   tour(J), points(J,N),                                  % Il n'a tué ni une de ses cibles ni le tueur à gage de l'autre, c'est donc un innocent
+                    NewNJ is N,
+                    retract(points(J,N)), assert(points(J,NewNJ)).
 
 % -- CONTROLER --
 
@@ -221,11 +227,11 @@ conc([X],L2,[X|L2]).
 conc([T1|Q1],L2,[T1|NQ]) :- conc(Q1,L2,NQ).
 
 % Donne la liste de personnage des tuiles adjacentes à la tuile(X,Y,_)
-tuileAdj(X,Y,Li):- Xi is X-1, Yi is Y-1, tuile(Xi,Yi,Li).
-tuileAdj(X,Y,Li):- Xi is X-1, Yi is Y  , tuile(Xi,Yi,Li).
-tuileAdj(X,Y,Li):- Xi is X-1, Yi is Y+1, tuile(Xi,Yi,Li).
-tuileAdj(X,Y,Li):- Xi is X  , Yi is Y-1, tuile(Xi,Yi,Li).
-tuileAdj(X,Y,Li):- Xi is X  , Yi is Y+1, tuile(Xi,Yi,Li).
-tuileAdj(X,Y,Li):- Xi is X+1, Yi is Y-1, tuile(Xi,Yi,Li).
-tuileAdj(X,Y,Li):- Xi is X+1, Yi is Y  , tuile(Xi,Yi,Li).
-tuileAdj(X,Y,Li):- Xi is X+1, Yi is Y+1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Xi,Yi,Li):- Xi is X-1, Yi is Y-1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Xi,Yi,Li):- Xi is X-1, Yi is Y  , tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Xi,Yi,Li):- Xi is X-1, Yi is Y+1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Xi,Yi,Li):- Xi is X  , Yi is Y-1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Xi,Yi,Li):- Xi is X  , Yi is Y+1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Xi,Yi,Li):- Xi is X+1, Yi is Y-1, tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Xi,Yi,Li):- Xi is X+1, Yi is Y  , tuile(Xi,Yi,Li).
+tuileAdj(X,Y,Xi,Yi,Li):- Xi is X+1, Yi is Y+1, tuile(Xi,Yi,Li).
