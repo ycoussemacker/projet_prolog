@@ -23,6 +23,9 @@
 :-dynamic(cibles/2).
 :-retractall(cibles(_,_)).
 
+:-dynamic(actions/1).
+:-retractall(actions(_)).
+
 % les joueurs
 joueurs([utilisateur, ordi]).
 
@@ -73,6 +76,7 @@ arme(fusil).
 :-asserta(vivants([])).
 :-asserta(cibles(utilisateur,[])).
 :-asserta(cibles(ordi,[])).
+:-asserta(actions([deplacer, deplacer, tuer, controler, controler])).
 
 :- asserta(tuile(1,1,[])).
 :- asserta(tuile(1,2,[])).
@@ -97,6 +101,7 @@ debutPartie():- vivants(L),             % On récupère la liste des vivants
                 donneTueur(),
                 donneCibles(), 
                 joueurs(ListeJoueurs), random_member(J,ListeJoueurs), assert(tour(J)), %On choisi au hasard qui commence
+                write(J), write(' qui commence.'),
                 !.
 
 attribution():- retract(tuile(Ligne, Colonne, LP)),         % On supprime la tuile et on récupère chaque ligne et colonne (début de la boucle)
@@ -135,27 +140,35 @@ donneCibles(J):-
 :- asserta(points(utilisateur,2)).
 :- asserta(points(ordi,2)).
 
-% Passer du tour du joueur au tour de l'ordinateur
-nouveauTour():-tour(utilisateur), retract(tour(utilisateur)), assert(tour(ordi)).
-nouveauTour():-tour(ordi), retract(tour(ordi)), assert(tour(utilisateur)).
-
+% Passer du tour du joueur au tour de l'ordinateur et inversement
+nouveauTour():- retract(tour(P1)), points(P2,_), P2\=P1, assert(tour(P2)),                              %On met à jour le tour en changeant de joueur
+                retract(actions(_)), assert(actions([deplacer, deplacer, tuer, controler, controler])), %On réinitialise les actions possibles
+                !.
+ 
 % Fin du jeu et attribution du titre vainqueur en fonction des points
 vainqueur(null).
-vainqueur() :- vainqueur(utilisateur), pointsUtilisateur(p1), pointsOrdi(p2), p1 > p2, write ('Félicitations vous avez gagné!').
-vainqueur() :- vainqueur(ordi), pointsUtilisateur(p1), pointsOrdi(p2), p1 < p2, write ('Vous avez perdu !').
+vainqueur() :- vainqueur(utilisateur), points(utilisateur,P1), points(ordi,P2), P1 > P2, write('Félicitations vous avez gagné!').
+vainqueur() :- vainqueur(ordi), points(utlisatisateur,P1), points(ordi,P2), P1 < P2, write('Vous avez perdu !').
 
 
 % ----------------------- ACTIONS DES JOUEURS ---------------------------
+verifieAction(A):- actions(ListeActions), dans(A,ListeActions).
+
+actualiseAction(A):- retract(actions(ListeActions)), supprimer(A,ListeActions,NL), assert(actions(NL)).
+verifieTour():- actions(ListeActions), longueur(N,ListeActions), N=<2, nouveauTour(), write('\nVotre tour est terminé.').
 
 % ------ DEPLACER ----- 
 % Prédicat déplacer => ajouter un personnage au début de la listePerso d'une tuile et le supprimer de la listePerso de la tuile d'origine
-deplacer(Perso, Ligne, Colonne) :- personnage(Perso), supprimer(Perso), ajouter(Perso, Ligne, Colonne), !.
+deplacer(Perso, Ligne, Colonne) :- verifieAction(deplacer), personnage(Perso), supprimer(Perso), ajouter(Perso, Ligne, Colonne), write('Personnage déplacé.'), actualiseAction(deplacer), verifieTour(), !.
 % Ajoute le personnage à la tuile renseignée
 ajouter(Perso, Ligne, Colonne) :-  retract(tuile(Ligne,Colonne, ListePerso)), asserta(tuile(Ligne,Colonne,[Perso|ListePerso])).
 % Cherche parmi toutes les tuiles qu'il possède celle qui contient le personnage et le supprime de cette dernière.
 supprimer(Perso) :- tuile(L,C,ListePerso), dans(Perso,ListePerso), supprimer(Perso,ListePerso, NewList), retract(tuile(L,C,_)), asserta(tuile(L,C,NewList)).% On récupère la liste des perso à partir de ligne et ccolonne pour en supprimer le Perso
 
 % ----- PEUT TUER ------ 
+
+peutTuer(P2,Xt,Yt):-    verifieAction(tuer),                                % Si l'action tuer est la liste des actions possible on dit qu'on peut tuer.
+                        tour(J), tueur(J,Tueur), peutTuer(Tueur,P2, Xt,Yt). % Permet de savoir qui on tuer avec notre tueur à gage
 
 % -- Couteau
 peutTuer(P1,P2,Xt,Yt):- personnage(P1), personnage(P2), P1\=P2, % on selectionne deux personnages différents
@@ -176,37 +189,80 @@ peutTuer(P1,P2,Xt,Yt):- personnage(P1), tuile(Xt,Y,L),
 
 
 % ----- TUE ------
-tue(P1,P2):-    peutTuer(P1,P2,X,Y),
+tue(P2):-       tour(J), tueur(J,Tueur), tue(Tueur,P2).        % permet de tuer avec notre tueur à gage
+
+tue(P1,P2):-    verifieAction(tuer),                                                    % Si l'action tuer est dans la liste des action, on tue
+                peutTuer(P1,P2,X,Y),
                 retract(vivants(LV)), supprimer(P2,LV,NLV), assert(vivants(NLV)),       % On actualise la liste des vivants
                 retract(morts(LM)), assert(morts([P2|LM])),                             % On actualise la liste des morts
                 retract(tuile(X,Y,LP)), supprimer(P2,LP,NLP), assert(tuile(X,Y,NLP)),   % On actualise la tuile
-                donnePoints(P2).                                                        % On actualise les points
-
-donnePoints(P2):-   tour(J), points(J,N), 
-                    cibles(J,LC), dans(P2,LC), NewN is N + 1,               % Si il a éliminé une de ses cibles
-                    retract(points(J,N)), assert(points(J,NewN)),           % On actualise les points
-                    retract(cibles(J,LC)), supprimer(P2,LC,NLC),            % On actualise sa liste de cibles.
-                    assert(cibles(J,NLC)).
-
-donnePoints(P2):-   tour(J), points(J,NJ),
-                    tueur(J2,P2), J2\=J, points(J2,NJ2),                    % Si le joueur tué est le tueur à gage de l'autre.
-                    NewNJ is NJ + 3,                                        % Le joueur actuel gagne 3 points
-                    NewNJ2 is NJ2 - 2,                                      % Son adversaire en perd 2 car il n'a plus son tueur à gage.
-                    retract(points(J,_)), assert(points(J,NewNJ)),
-                    retract(points(J2,_)), assert(points(J2, NewNJ2)).
-
-donnePoints(_):-   tour(J), points(J,N),                                  % Il n'a tué ni une de ses cibles ni le tueur à gage de l'autre, c'est donc un innocent
-                    NewNJ is N,
-                    retract(points(J,N)), assert(points(J,NewNJ)).
+                donnePoints(P2),                                                        % On actualise les points
+                actualiseAction(tuer),
+                verifieTour(),
+                !.                                                        
 
 % -- CONTROLER --
+controle(Perso):-   verifieAction(controler),
+                    tour(J), tueur(J2,Perso),  J2\=J,               % Si le tueur de l'adversaire et le perso contrôlé
+                    tuile(X,Y,L), dans(Perso,L),                    % on récupère la tuile où il y a le perso contrôlé
+                    retract(tuile(X,Y,_)), supprimer(Perso,L, NL),   % On actualise la tuile du perso contrôlé
+                    assert(tuile(X,Y,NL)),
+                    retract(morts(LM)), assert(morts([Perso|LM])),    % on considère le personnage comme mort
+                    retract(vivants(LV)), supprimer(Perso,LV,NLV), 
+                    assert(vivants(NLV)),                           % On retire le perso de la liste des vivants
+                    points(J,NJ), points(J2,NJ2),                   % On récupère les points des 2 joueurs
+                    NewNJ is NJ + 1,                                % Le joueur actuel gagne 1 points
+                    NewNJ2 is NJ2 - 2,                              % Son adversaire en perd 2 car il n'a plus son tueur à gage.
+                    retract(points(J,_)), assert(points(J,NewNJ)),
+                    retract(points(J2,_)), assert(points(J2, NewNJ2)),
+                    write('Bravo ! Vous avez arrêté le tueur à gage adverse. Vous gagnez un point et votre adversaire perd ses deux points d\'avance.\n'), 
+                    actualiseAction(controler),
+                    verifieTour(),
+                    !.
 
+controle(_):-       verifieAction(controler),
+                    write('Dommage ! Vous avez contrôlé un innocent. Vous ne gagnez ni ne perdez de points.\n'),
+                    actualiseAction(controler),
+                    verifieTour(),!.
 
 
 % ------------------ AFFICHAGE --------------------
 
 % Permet l'affichage du plateau en appuyant sur le ";" dans la console ProLog
 plateau(X,Y,LP):- tuile(X,Y,LP).
+
+% Donne les cible pour le joueur en cours
+cibles(LC):-tour(J), cibles(J,LC).
+cibles():- cibles(LC), write('Cibles : '), write(LC).
+
+% Donne les points pour le joueur en cours
+points(N):- tour(J), points(J,N).
+points():- points(N), write('points : '), write(N).
+
+% Donne le tueur pour le joueur en cours
+tueur(P):-  tour(J), tueur(J,P).
+tueur():- tueur(P), write('tueur : '), write(P).
+
+% attibu les points à chaque action du joueur
+donnePoints(P2):-   tour(J), points(J,N), 
+                    cibles(J,LC), dans(P2,LC), NewN is N + 1,               % Si il a éliminé une de ses cibles
+                    retract(points(J,N)), assert(points(J,NewN)),           % On actualise les points
+                    retract(cibles(J,LC)), supprimer(P2,LC,NLC),            % On actualise sa liste de cibles.
+                    assert(cibles(J,NLC)),
+                    write('Bravo ! Vous avez tué une de vos cibles. Vous gagnez un point.\n'), !.
+
+donnePoints(P2):-   tour(J), points(J,NJ),
+                    tueur(J2,P2), J2\=J, points(J2,NJ2),                    % Si le joueur tué est le tueur à gage de l'autre.
+                    NewNJ is NJ + 3,                                        % Le joueur actuel gagne 3 points
+                    NewNJ2 is NJ2 - 2,                                      % Son adversaire en perd 2 car il n'a plus son tueur à gage.
+                    retract(points(J,_)), assert(points(J,NewNJ)),
+                    retract(points(J2,_)), assert(points(J2, NewNJ2)),
+                    write('Bravo ! Vous avez tué le tueur à gage adverse. Vous gagnez trois point et votre adversaire perd ses deux points d\'avance.\n'), !.
+
+donnePoints(_):-    tour(J), points(J,N),                                  % Il n'a tué ni une de ses cibles ni le tueur à gage de l'autre, c'est donc un innocent
+                    NewNJ is N -1,
+                    retract(points(J,N)), assert(points(J,NewNJ)),
+                    write('Dommage ! Vous avez tué un innocent. Vous perdez un point.\n').
 
 % ------------------ Fonctions générales utiles ------------------
 
@@ -231,7 +287,7 @@ longueur(0,[]).
 conc([X],L2,[X|L2]).
 conc([T1|Q1],L2,[T1|NQ]) :- conc(Q1,L2,NQ).
 
-% Donne la liste de personnage des tuiles adjacentes à la tuile(X,Y,_)
+% Donne la liste de personnage Li des tuile(Xi,Yi) adjacentes à la tuile(X,Y)
 tuileAdj(X,Y,Xi,Yi,Li):- Xi is X-1, Yi is Y-1, tuile(Xi,Yi,Li).
 tuileAdj(X,Y,Xi,Yi,Li):- Xi is X-1, Yi is Y  , tuile(Xi,Yi,Li).
 tuileAdj(X,Y,Xi,Yi,Li):- Xi is X-1, Yi is Y+1, tuile(Xi,Yi,Li).
