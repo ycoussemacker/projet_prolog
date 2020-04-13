@@ -23,8 +23,8 @@
 :-dynamic(cibles/2).
 :-retractall(cibles(_,_)).
 
-:-dynamic(actions/1).
-:-retractall(actions(_)).
+:-dynamic(actions/2).
+:-retractall(actions(_,_)).
 
 % les joueurs
 joueurs([utilisateur, ordi]).
@@ -76,7 +76,7 @@ arme(fusil).
 :-asserta(vivants([])).
 :-asserta(cibles(utilisateur,[])).
 :-asserta(cibles(ordi,[])).
-:-asserta(actions([deplacer, deplacer, tuer, controler, controler])).
+:-asserta(actions([deplacer, tue, controle], 2)).
 
 :- asserta(tuile(1,1,[])).
 :- asserta(tuile(1,2,[])).
@@ -141,21 +141,19 @@ donneCibles(J):-
 :- asserta(points(ordi,2)).
 
 % Passer du tour du joueur au tour de l'ordinateur et inversement
-nouveauTour():- retract(tour(P1)), points(P2,_), P2\=P1, assert(tour(P2)),                              %On met à jour le tour en changeant de joueur
-                retract(actions(_)), assert(actions([deplacer, deplacer, tuer, controler, controler])), %On réinitialise les actions possibles
+nouveauTour():- retract(tour(P1)), points(P2,_), P2\=P1, assert(tour(P2)),             %On met à jour le tour en changeant de joueur
+                retract(actions(_,_)), assert(actions([deplacer, tue, controle],2)),   %On réinitialise les actions possibles ainsi que le nombre d'actions restantes
                 !.
- 
-% Fin du jeu et attribution du titre vainqueur en fonction des points
-vainqueur(null).
-vainqueur() :- vainqueur(utilisateur), points(utilisateur,P1), points(ordi,P2), P1 > P2, write('Félicitations vous avez gagné!').
-vainqueur() :- vainqueur(ordi), points(utlisatisateur,P1), points(ordi,P2), P1 < P2, write('Vous avez perdu !').
-
 
 % ----------------------- ACTIONS DES JOUEURS ---------------------------
-verifieAction(A):- actions(ListeActions), dans(A,ListeActions).
+verifieAction(A):- actions(ListeActions,_), dans(A,ListeActions).
 
-actualiseAction(A):- retract(actions(ListeActions)), supprimer(A,ListeActions,NL), assert(actions(NL)).
-verifieTour():- actions(ListeActions), longueur(N,ListeActions), N=<2, nouveauTour(), write('\nVotre tour est terminé.').
+actualiseAction(A):- A==tue, retract(actions(ListeActions,Nb)), supprimer(A,ListeActions,NL), NewNb is Nb - 1, assert(actions(NL, NewNb)),!. % on actualise la liste des actions possibles si c'est "tue" et on décrémente le nombre d'action restantes.
+actualiseAction(_):- retract(actions(ListeActions,Nb)), NewNb is Nb - 1, assert(actions(ListeActions, NewNb)). % on décrémente le nombre d'action restantes
+
+verifieTour():- actions(_,Nb), Nb==0, nouveauTour(), write('\nVotre tour est terminé.'). % On limite le nombre d'action à 2
+verifieTour():- morts(LM), tueur(J1, P1), dans(P1,LM), tueur(J2,P2), J1\=J2, dans(P2,LM), finPartie(),!.
+verifieTour():- cibles(_,LC), longueur(N,LC), N=<0, finPartie(), !.
 
 % ------ DEPLACER ----- 
 % Prédicat déplacer => ajouter un personnage au début de la listePerso d'une tuile et le supprimer de la listePerso de la tuile d'origine
@@ -167,7 +165,7 @@ supprimer(Perso) :- tuile(L,C,ListePerso), dans(Perso,ListePerso), supprimer(Per
 
 % ----- PEUT TUER ------ 
 
-peutTuer(P2,Xt,Yt):-    verifieAction(tuer),                                % Si l'action tuer est la liste des actions possible on dit qu'on peut tuer.
+peutTuer(P2,Xt,Yt):-    verifieAction(tue),                                % Si l'action tuer est la liste des actions possible on dit qu'on peut tuer.
                         tour(J), tueur(J,Tueur), peutTuer(Tueur,P2, Xt,Yt). % Permet de savoir qui on tuer avec notre tueur à gage
 
 % -- Couteau
@@ -191,18 +189,18 @@ peutTuer(P1,P2,Xt,Yt):- personnage(P1), tuile(Xt,Y,L),
 % ----- TUE ------
 tue(P2):-       tour(J), tueur(J,Tueur), tue(Tueur,P2).        % permet de tuer avec notre tueur à gage
 
-tue(P1,P2):-    verifieAction(tuer),                                                    % Si l'action tuer est dans la liste des action, on tue
+tue(P1,P2):-    verifieAction(tue),                                                    % Si l'action tuer est dans la liste des action, on tue
                 peutTuer(P1,P2,X,Y),
                 retract(vivants(LV)), supprimer(P2,LV,NLV), assert(vivants(NLV)),       % On actualise la liste des vivants
                 retract(morts(LM)), assert(morts([P2|LM])),                             % On actualise la liste des morts
                 retract(tuile(X,Y,LP)), supprimer(P2,LP,NLP), assert(tuile(X,Y,NLP)),   % On actualise la tuile
                 donnePoints(P2),                                                        % On actualise les points
-                actualiseAction(tuer),
+                actualiseAction(tue),
                 verifieTour(),
                 !.                                                        
 
 % -- CONTROLER --
-controle(Perso):-   verifieAction(controler),
+controle(Perso):-   verifieAction(controle),
                     tour(J), tueur(J2,Perso),  J2\=J,               % Si le tueur de l'adversaire et le perso contrôlé
                     tuile(X,Y,L), dans(Perso,L),                    % on récupère la tuile où il y a le perso contrôlé
                     retract(tuile(X,Y,_)), supprimer(Perso,L, NL),   % On actualise la tuile du perso contrôlé
@@ -216,13 +214,13 @@ controle(Perso):-   verifieAction(controler),
                     retract(points(J,_)), assert(points(J,NewNJ)),
                     retract(points(J2,_)), assert(points(J2, NewNJ2)),
                     write('Bravo ! Vous avez arrêté le tueur à gage adverse. Vous gagnez un point et votre adversaire perd ses deux points d\'avance.\n'), 
-                    actualiseAction(controler),
+                    actualiseAction(controle),
                     verifieTour(),
                     !.
 
-controle(_):-       verifieAction(controler),
+controle(_):-       verifieAction(controle),
                     write('Dommage ! Vous avez contrôlé un innocent. Vous ne gagnez ni ne perdez de points.\n'),
-                    actualiseAction(controler),
+                    actualiseAction(controle),
                     verifieTour(),!.
 
 
@@ -230,6 +228,9 @@ controle(_):-       verifieAction(controler),
 
 % Permet l'affichage du plateau en appuyant sur le ";" dans la console ProLog
 plateau(X,Y,LP):- tuile(X,Y,LP).
+
+% affiche qui est le joueur en cours
+tour() :- tour(J), write(J).
 
 % Donne les cible pour le joueur en cours
 cibles(LC):-tour(J), cibles(J,LC).
@@ -263,6 +264,14 @@ donnePoints(_):-    tour(J), points(J,N),                                  % Il 
                     NewNJ is N -1,
                     retract(points(J,N)), assert(points(J,NewNJ)),
                     write('Dommage ! Vous avez tué un innocent. Vous perdez un point.\n').
+
+finPartie():-   points(J1,P1), points(J2,P2), J2\=J1, P1<P2, vainqueur(J2),!.
+finPartie():-   points(J1,P1), points(J2,P2), J2\=J1, P1>P2, vainqueur(J1),!.
+finPartie():-   points(J1,P), points(J2,P), J2\=J1, vainqueur(),!.
+
+% Fin du jeu et attribution du titre vainqueur en fonction des points
+vainqueur(P) :- write(P), write(' à gagné').
+vainqueur() :- write('\n\n\nEgalité.\n\n\n').
 
 % ------------------ Fonctions générales utiles ------------------
 
